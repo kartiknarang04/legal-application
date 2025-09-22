@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Upload, FileText, Brain, MessageSquare, Loader2, CheckCircle, AlertCircle, Send, Bot, User, ChevronDown, ChevronUp, Copy, Check, Database, Users, Building, Gavel, Sparkles, Eye, Download } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Upload, FileText, Brain, MessageSquare, Loader2, CheckCircle, AlertCircle, Send, Bot, User, ChevronDown, ChevronUp, Copy, Check, Database, Users, Building, Gavel, Sparkles, Eye } from 'lucide-react';
 import axios from 'axios';
 
 
@@ -12,14 +12,14 @@ const BACKEND_2_URL = process.env.NEXT_PUBLIC_BACKEND_2_URL || 'http://localhost
 // Main App Component
 const LegalDocumentAnalyzer = () => {
   const [currentStep, setCurrentStep] = useState('upload');
-  const [sessionId, setSessionId] = useState(null);
-  const [uploadedFile, setUploadedFile] = useState(null);
-  const [processingStatus, setProcessingStatus] = useState(null);
-  const [nerResults, setNerResults] = useState(null);
-  const [summaryResults, setSummaryResults] = useState(null);
-  const [chatHistory, setChatHistory] = useState([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [, setUploadedFile] = useState<File | null>(null);
+  const [processingStatus, setProcessingStatus] = useState<string | null>(null);
+  const [nerResults, setNerResults] = useState<NerResults | null>(null);
+  const [summaryResults, setSummaryResults] = useState<SummaryResults | null>(null);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Reset function for new session
   const resetSession = () => {
@@ -64,7 +64,6 @@ const LegalDocumentAnalyzer = () => {
       <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-8">
           <StepIndicator 
-            step={1} 
             title="Upload" 
             icon={Upload} 
             active={currentStep === 'upload'} 
@@ -72,7 +71,6 @@ const LegalDocumentAnalyzer = () => {
           />
           <div className="flex-1 h-px bg-gray-200 mx-4" />
           <StepIndicator 
-            step={2} 
             title="Process" 
             icon={Brain} 
             active={currentStep === 'processing'} 
@@ -80,7 +78,6 @@ const LegalDocumentAnalyzer = () => {
           />
           <div className="flex-1 h-px bg-gray-200 mx-4" />
           <StepIndicator 
-            step={3} 
             title="Results" 
             icon={Eye} 
             active={currentStep === 'results'} 
@@ -88,7 +85,6 @@ const LegalDocumentAnalyzer = () => {
           />
           <div className="flex-1 h-px bg-gray-200 mx-4" />
           <StepIndicator 
-            step={4} 
             title="Chat" 
             icon={MessageSquare} 
             active={currentStep === 'chat'} 
@@ -115,8 +111,8 @@ const LegalDocumentAnalyzer = () => {
               setSessionId(session);
               setCurrentStep('processing');
             }}
-            setError={setError}
-            setIsLoading={setIsLoading}
+            setError={(msg) => setError(msg)}
+            setIsLoading={(val) => setIsLoading(val)}
             isLoading={isLoading}
           />
         )}
@@ -131,8 +127,8 @@ const LegalDocumentAnalyzer = () => {
               setCurrentStep('results');
             }}
             processingStatus={processingStatus}
-            setProcessingStatus={setProcessingStatus}
-            setError={setError}
+            setProcessingStatus={(status) => setProcessingStatus(status)}
+            setError={(msg) => setError(msg)}
           />
         )}
 
@@ -150,7 +146,7 @@ const LegalDocumentAnalyzer = () => {
             sessionId={sessionId}
             chatHistory={chatHistory}
             setChatHistory={setChatHistory}
-            setError={setError}
+            setError={(msg) => setError(msg)}
           />
         )}
       </div>
@@ -159,7 +155,14 @@ const LegalDocumentAnalyzer = () => {
 };
 
 // Step Indicator Component
-const StepIndicator = ({ step, title, icon: Icon, active, completed }) => (
+type StepIndicatorProps = {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  active: boolean;
+  completed: boolean;
+};
+
+const StepIndicator = ({ title, icon: Icon, active, completed }: StepIndicatorProps) => (
   <div className="flex flex-col items-center">
     <div className={`
       w-12 h-12 rounded-full flex items-center justify-center border-2 transition-all
@@ -180,11 +183,18 @@ const StepIndicator = ({ step, title, icon: Icon, active, completed }) => (
 );
 
 // File Uploader Component
-const FileUploader = ({ onUpload, setError, setIsLoading, isLoading }) => {
-  const [dragActive, setDragActive] = useState(false);
-  const fileInputRef = useRef(null);
+type FileUploaderProps = {
+  onUpload: (file: File, sessionId: string) => void;
+  setError: (msg: string | null) => void;
+  setIsLoading: (loading: boolean) => void;
+  isLoading: boolean;
+};
 
-  const handleDrag = (e) => {
+const FileUploader = ({ onUpload, setError, setIsLoading, isLoading }: FileUploaderProps) => {
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === "dragenter" || e.type === "dragover") {
@@ -194,7 +204,7 @@ const FileUploader = ({ onUpload, setError, setIsLoading, isLoading }) => {
     }
   };
 
-  const handleDrop = (e) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
@@ -204,17 +214,18 @@ const FileUploader = ({ onUpload, setError, setIsLoading, isLoading }) => {
     }
   };
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     e.preventDefault();
     if (e.target.files && e.target.files[0]) {
       handleFile(e.target.files[0]);
     }
   };
 
-  const handleFile = async (file) => {
+  const handleFile = async (file: File) => {
     // Validate file type
     const allowedTypes = ['.pdf', '.txt', '.docx', '.doc'];
-    const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+    const ext = file.name.includes('.') ? file.name.split('.').pop() : '';
+    const fileExt = '.' + (ext ? ext.toLowerCase() : '');
     
     if (!allowedTypes.includes(fileExt)) {
       setError(`Unsupported file type. Please upload: ${allowedTypes.join(', ')}`);
@@ -245,8 +256,9 @@ const FileUploader = ({ onUpload, setError, setIsLoading, isLoading }) => {
       } else {
         throw new Error(response.data.message || 'Upload failed');
       }
-    } catch (error) {
-      setError(error.response?.data?.detail || error.message || 'Upload failed');
+    } catch (error: unknown) {
+      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(detail || (error as Error).message || 'Upload failed');
     } finally {
       setIsLoading(false);
     }
@@ -306,7 +318,15 @@ const FileUploader = ({ onUpload, setError, setIsLoading, isLoading }) => {
 };
 
 // Processing Monitor Component
-const ProcessingMonitor = ({ sessionId, onComplete, processingStatus, setProcessingStatus, setError }) => {
+type ProcessingMonitorProps = {
+  sessionId: string | null;
+  onComplete: (results: BackendResults) => void;
+  processingStatus: string | null;
+  setProcessingStatus: (status: string | null) => void;
+  setError: (msg: string | null) => void;
+};
+
+const ProcessingMonitor = ({ sessionId, onComplete, processingStatus, setProcessingStatus, setError }: ProcessingMonitorProps) => {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
@@ -344,8 +364,9 @@ const ProcessingMonitor = ({ sessionId, onComplete, processingStatus, setProcess
 
         // Continue polling if not completed or failed
         setTimeout(checkStatus, 2000);
-      } catch (error) {
-        setError(error.response?.data?.detail || 'Failed to check processing status');
+      } catch (error: unknown) {
+        const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+        setError(detail || 'Failed to check processing status');
       }
     };
 
@@ -429,7 +450,14 @@ const ProcessingMonitor = ({ sessionId, onComplete, processingStatus, setProcess
 };
 
 // Processing Step Component
-const ProcessingStep = ({ title, description, completed, active }) => (
+type ProcessingStepProps = {
+  title: string;
+  description: string;
+  completed: boolean;
+  active: boolean;
+};
+
+const ProcessingStep = ({ title, description, completed, active }: ProcessingStepProps) => (
   <div className={`flex items-center p-3 rounded-lg ${
     completed ? 'bg-green-50' : active ? 'bg-blue-50' : 'bg-gray-50'
   }`}>
@@ -460,11 +488,36 @@ const ProcessingStep = ({ title, description, completed, active }) => (
 );
 
 // Results Display Component
-const ResultsDisplay = ({ nerResults, summaryResults, sessionId, onStartChat }) => {
+type NerResults = {
+  total_entities: number;
+  unique_labels: string[];
+  entity_counts: Record<string, { entities: string[]; count: number }>;
+};
+
+type SummaryResults = {
+  summary: string;
+  word_count?: number;
+  compression_ratio: number;
+  sentence_count?: number;
+};
+
+type BackendResults = {
+  ner_results: NerResults;
+  summary_results: SummaryResults;
+};
+
+type ResultsDisplayProps = {
+  nerResults: NerResults | null;
+  summaryResults: SummaryResults | null;
+  sessionId: string | null;
+  onStartChat: () => void;
+};
+
+const ResultsDisplay = ({ nerResults, summaryResults, sessionId, onStartChat }: ResultsDisplayProps) => {
   const [activeTab, setActiveTab] = useState('summary');
   const [copied, setCopied] = useState(false);
 
-  const copyToClipboard = async (text) => {
+  const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -474,7 +527,7 @@ const ResultsDisplay = ({ nerResults, summaryResults, sessionId, onStartChat }) 
     }
   };
 
-  const entityIcons = {
+  const entityIcons: Record<string, typeof FileText> = {
     PERSON: Users,
     ORG: Building,
     PRECEDENT: Gavel,
@@ -489,7 +542,7 @@ const ResultsDisplay = ({ nerResults, summaryResults, sessionId, onStartChat }) 
     LAW: FileText,
   };
 
-  const entityColors = {
+  const entityColors: Record<string, string> = {
     PERSON: "bg-blue-100 text-blue-800 border-blue-200",
     ORG: "bg-green-100 text-green-800 border-green-200",
     PRECEDENT: "bg-purple-100 text-purple-800 border-purple-200",
@@ -619,7 +672,7 @@ const ResultsDisplay = ({ nerResults, summaryResults, sessionId, onStartChat }) 
                 </div>
                 <div className="text-center p-4 bg-gray-50 rounded-lg">
                   <div className="text-2xl font-bold text-purple-600">
-                    {Object.values(nerResults.entity_counts || {}).reduce((sum, cat) => sum + cat.entities?.length || 0, 0)}
+                {Object.values(nerResults.entity_counts || {}).reduce((sum: number, cat: { entities: string[]; count: number }) => sum + (cat.entities?.length || 0), 0)}
                   </div>
                   <div className="text-sm text-gray-500">Unique Entities</div>
                 </div>
@@ -627,8 +680,13 @@ const ResultsDisplay = ({ nerResults, summaryResults, sessionId, onStartChat }) 
                   <div className="text-2xl font-bold text-orange-600">
                     {Math.round(
                       (nerResults.total_entities /
-                        Math.max(Object.values(nerResults.entity_counts || {}).reduce((sum, cat) => sum + cat.entities?.length || 0, 0), 1)) *
-                        100
+                        Math.max(
+                          Object.values(nerResults.entity_counts || {}).reduce(
+                            (sum: number, cat: { entities: string[]; count: number }) => sum + (cat.entities?.length || 0),
+                            0
+                          ),
+                          1
+                        )) * 100
                     )}%
                   </div>
                   <div className="text-sm text-gray-500">Repetition</div>
@@ -637,9 +695,9 @@ const ResultsDisplay = ({ nerResults, summaryResults, sessionId, onStartChat }) 
 
               {/* Entity Categories */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {Object.entries(nerResults.entity_counts || {}).map(([label, data]) => {
-                  const Icon = entityIcons[label] || FileText;
-                  const colorClass = entityColors[label] || "bg-gray-100 text-gray-800 border-gray-200";
+                {Object.entries(nerResults.entity_counts || {}).map(([label, data]: [string, { entities: string[]; count: number }]) => {
+                  const Icon = entityIcons[label as keyof typeof entityIcons] || FileText;
+                  const colorClass = entityColors[label as keyof typeof entityColors] || "bg-gray-100 text-gray-800 border-gray-200";
 
                   return (
                     <div key={label} className="border border-gray-200 rounded-lg p-4">
@@ -678,26 +736,42 @@ const ResultsDisplay = ({ nerResults, summaryResults, sessionId, onStartChat }) 
 };
 
 // Chat Interface Component
-const ChatInterface = ({ sessionId, chatHistory, setChatHistory, setError }) => {
+type ChatMessage = {
+  role: 'user' | 'assistant';
+  message: string;
+  timestamp: string;
+  sources?: Array<{
+    chunk_id?: string;
+    title?: string;
+    section?: string;
+    relevance_score?: number;
+    text_preview?: string;
+    entities?: string[];
+  }>;
+  confidence?: number;
+  query_analysis?: {
+    query_type?: string;
+    key_concepts?: string[];
+    entities?: string[];
+  };
+  error?: boolean;
+};
+
+type ChatInterfaceProps = {
+  sessionId: string | null;
+  chatHistory: ChatMessage[];
+  setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  setError: (msg: string | null) => void;
+};
+
+const ChatInterface = ({ sessionId, chatHistory, setChatHistory, setError }: ChatInterfaceProps) => {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [ragInitialized, setRagInitialized] = useState(false);
-  const [expandedSources, setExpandedSources] = useState({});
-  const chatEndRef = useRef(null);
+  const [expandedSources, setExpandedSources] = useState<Record<number, boolean>>({});
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    // Initialize RAG system for this session
-    initializeRAG();
-    // Load existing chat history
-    loadChatHistory();
-  }, [sessionId]);
-
-  useEffect(() => {
-    // Scroll to bottom when new messages are added
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatHistory]);
-
-  const initializeRAG = async () => {
+  const initializeRAG = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await axios.post(`${BACKEND_2_URL}/init/${sessionId}`, {});
@@ -706,29 +780,44 @@ const ChatInterface = ({ sessionId, chatHistory, setChatHistory, setError }) => 
       } else {
         throw new Error(response.data.message || 'RAG initialization failed');
       }
-    } catch (error) {
-      setError(`RAG initialization failed: ${error.response?.data?.detail || error.message}`);
+    } catch (error: unknown) {
+      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(`RAG initialization failed: ${detail || (error as Error).message}`);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [sessionId, setError]);
 
-  const loadChatHistory = async () => {
+  const loadChatHistory = useCallback(async () => {
     try {
       const response = await axios.get(`${BACKEND_2_URL}/history/${sessionId}`);
       if (response.data.success) {
         setChatHistory(response.data.chat_history);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to load chat history:', error);
       // Don't show error for missing history, it's normal for new sessions
     }
-  };
+  }, [sessionId, setChatHistory]);
+
+  useEffect(() => {
+    // Initialize RAG system for this session
+    initializeRAG();
+    // Load existing chat history
+    loadChatHistory();
+  }, [initializeRAG, loadChatHistory]);
+
+  useEffect(() => {
+    // Scroll to bottom when new messages are added
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatHistory]);
+
+  
 
   const sendMessage = async () => {
     if (!message.trim() || isLoading || !ragInitialized) return;
 
-    const userMessage = {
+    const userMessage: ChatMessage = {
       role: 'user',
       message: message.trim(),
       timestamp: new Date().toISOString()
@@ -744,7 +833,7 @@ const ChatInterface = ({ sessionId, chatHistory, setChatHistory, setError }) => 
       });
 
       if (response.data.success) {
-        const assistantMessage = {
+        const assistantMessage: ChatMessage = {
           role: 'assistant',
           message: response.data.answer,
           timestamp: new Date().toISOString(),
@@ -757,9 +846,10 @@ const ChatInterface = ({ sessionId, chatHistory, setChatHistory, setError }) => 
       } else {
         throw new Error(response.data.message || 'Chat failed');
       }
-    } catch (error) {
-      setError(`Chat failed: ${error.response?.data?.detail || error.message}`);
-      const errorMessage = {
+    } catch (error: unknown) {
+      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(`Chat failed: ${detail || (error as Error).message}`);
+      const errorMessage: ChatMessage = {
         role: 'assistant',
         message: 'Sorry, I encountered an error processing your question. Please try again.',
         timestamp: new Date().toISOString(),
@@ -771,14 +861,14 @@ const ChatInterface = ({ sessionId, chatHistory, setChatHistory, setError }) => 
     }
   };
 
-  const handleKeyPress = (e) => {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
   };
 
-  const toggleSourceExpansion = (messageIndex) => {
+  const toggleSourceExpansion = (messageIndex: number) => {
     setExpandedSources(prev => ({
       ...prev,
       [messageIndex]: !prev[messageIndex]
@@ -951,7 +1041,7 @@ const ChatInterface = ({ sessionId, chatHistory, setChatHistory, setError }) => 
             <input
               type="text"
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMessage(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder={
                 ragInitialized
@@ -1000,20 +1090,20 @@ const ChatInterface = ({ sessionId, chatHistory, setChatHistory, setError }) => 
       </div>
 
       {/* Query Analysis (if available) */}
-      {chatHistory.length > 0 && chatHistory[chatHistory.length - 1].query_analysis && (
+      {chatHistory.length > 0 && chatHistory[chatHistory.length - 1]?.query_analysis && (
         <div className="bg-white rounded-xl shadow-lg p-4">
           <h4 className="font-semibold text-gray-900 mb-3">Query Analysis</h4>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div>
               <span className="text-gray-500">Query Type:</span>
               <div className="font-medium">
-                {chatHistory[chatHistory.length - 1].query_analysis.query_type || 'general'}
+                {chatHistory[chatHistory.length - 1]?.query_analysis?.query_type || 'general'}
               </div>
             </div>
             <div>
               <span className="text-gray-500">Key Concepts:</span>
               <div className="flex flex-wrap gap-1 mt-1">
-                {chatHistory[chatHistory.length - 1].query_analysis.key_concepts?.map((concept, index) => (
+                {chatHistory[chatHistory.length - 1]?.query_analysis?.key_concepts?.map((concept: string, index: number) => (
                   <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
                     {concept}
                   </span>
@@ -1023,7 +1113,7 @@ const ChatInterface = ({ sessionId, chatHistory, setChatHistory, setError }) => 
             <div>
               <span className="text-gray-500">Entities Found:</span>
               <div className="font-medium">
-                {chatHistory[chatHistory.length - 1].query_analysis.entities?.length || 0}
+                {chatHistory[chatHistory.length - 1]?.query_analysis?.entities?.length || 0}
               </div>
             </div>
           </div>

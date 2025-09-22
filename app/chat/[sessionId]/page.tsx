@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,8 +14,22 @@ interface Message {
   type: "user" | "assistant";
   content: string;
   timestamp: Date;
-  sources?: any[];
+  sources?: Array<{
+    chunk_id?: string;
+    title?: string;
+    section?: string;
+    relevance_score?: number;
+    text_preview?: string;
+    entities?: string[];
+  }>;
   confidence?: number;
+}
+
+interface SessionInfo {
+  filename: string;
+  chunk_count: number;
+  status: string;
+  error?: string;
 }
 
 export default function ChatPage() {
@@ -26,16 +40,12 @@ export default function ChatPage() {
   const [initialized, setInitialized] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sessionInfo, setSessionInfo] = useState<any>(null);
+  const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    initializeRAGSession();
-  }, [sessionId]);
-
-  const initializeRAGSession = async () => {
+  const initializeRAGSession = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -61,12 +71,17 @@ export default function ChatPage() {
         setError('Failed to initialize RAG session');
       }
 
-    } catch (error: any) {
-      setError(error.response?.data?.detail || 'Failed to initialize chat session');
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(detail || 'Failed to initialize chat session');
     } finally {
       setLoading(false);
     }
-  };
+  }, [sessionId]);
+
+  useEffect(() => {
+    initializeRAGSession();
+  }, [initializeRAGSession]);
 
   const sendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -98,11 +113,11 @@ export default function ChatPage() {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-    } catch (error: any) {
+    } catch (err: unknown) {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: "assistant",
-        content: `Error: ${error.response?.data?.detail || 'Failed to get response'}`,
+        content: `Error: ${(err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to get response'}`,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
