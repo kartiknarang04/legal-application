@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { Separator } from "@/components/ui/seperator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   MessageSquare,
@@ -43,6 +43,7 @@ interface Message {
   contexts?: Array<{
     title: string;
     score: number;
+    relevance_score?: number;
     chunk_index: number;
     legal_terms: string[];
     relevant_passages: string[];
@@ -62,7 +63,8 @@ export function RAGChat({ documentText, sessionId }: RAGChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [ragStatus, setRagStatus] = useState<any>(null);
+  type RagStatus = { rag_initialized?: boolean } | null;
+  const [ragStatus, setRagStatus] = useState<RagStatus>(null);
   const [expandedContexts, setExpandedContexts] = useState<
     Record<string, boolean>
   >({});
@@ -86,7 +88,7 @@ export function RAGChat({ documentText, sessionId }: RAGChatProps) {
       const response = await axios.get(
         `${process.env.NEXT_PUBLIC_BACKEND_2_URL}/rag/status`
       );
-      setRagStatus(response.data);
+      setRagStatus(response.data as RagStatus);
     } catch (error) {
       console.error("Failed to check RAG status:", error);
     }
@@ -166,14 +168,14 @@ export function RAGChat({ documentText, sessionId }: RAGChatProps) {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const messageText =
+        (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        "Failed to get response from RAG system";
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: "assistant",
-        content: `Error: ${
-          error.response?.data?.detail ||
-          "Failed to get response from RAG system"
-        }`,
+        content: `Error: ${messageText}`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -215,15 +217,15 @@ export function RAGChat({ documentText, sessionId }: RAGChatProps) {
               <div className="flex items-center gap-2">
                 <div
                   className={`w-3 h-3 rounded-full ${
-                    ragStatus?.available ? "bg-green-500" : "bg-red-500"
+                    ragStatus && ragStatus.rag_initialized ? "bg-green-500" : "bg-red-500"
                   }`}
                 />
                 <span className="text-sm font-medium">
-                  {ragStatus?.available ? "Available" : "Not Available"}
+                  {ragStatus && ragStatus.rag_initialized ? "Available" : "Not Available"}
                 </span>
               </div>
               <Badge variant="secondary">
-                {ragStatus?.documents || 0} documents indexed
+                {(sessionId || currentSessionId) ? 1 : 0} documents indexed
               </Badge>
             </div>
             {documentText && (
@@ -262,9 +264,9 @@ export function RAGChat({ documentText, sessionId }: RAGChatProps) {
                 <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p className="mb-2">No messages yet</p>
                 <p className="text-sm">
-                  {ragStatus?.documents > 0
+                  {(sessionId || currentSessionId)
                     ? "Ask questions about your documents!"
-                    : "Add documents to the knowledge base to start asking questions"}
+                    : "Initialize RAG to start asking questions"}
                 </p>
               </div>
             ) : (
@@ -420,7 +422,7 @@ export function RAGChat({ documentText, sessionId }: RAGChatProps) {
 
           {/* Input */}
           <div className="p-4">
-            {!ragStatus?.available && (
+            {!(ragStatus && ragStatus.rag_initialized) && (
               <Alert className="mb-4">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
@@ -435,15 +437,13 @@ export function RAGChat({ documentText, sessionId }: RAGChatProps) {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder={
-                  ragStatus?.documents > 0
-                    ? "Ask a question about your documents..."
-                    : "Add documents to start asking questions..."
-                }
+                placeholder={(sessionId || currentSessionId)
+                  ? "Ask a question about your documents..."
+                  : "Initialize RAG to start asking questions..."}
                 disabled={
                   isLoading ||
-                  !ragStatus?.available ||
-                  ragStatus?.documents === 0
+                  !ragStatus?.rag_initialized ||
+                  !(sessionId || currentSessionId)
                 }
                 className="flex-1"
               />
@@ -452,8 +452,8 @@ export function RAGChat({ documentText, sessionId }: RAGChatProps) {
                 disabled={
                   isLoading ||
                   !inputValue.trim() ||
-                  !ragStatus?.available ||
-                  ragStatus?.documents === 0
+                  !ragStatus?.rag_initialized ||
+                  !(sessionId || currentSessionId)
                 }
                 size="icon"
               >

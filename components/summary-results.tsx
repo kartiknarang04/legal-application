@@ -23,7 +23,7 @@ import {
   Check,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import axios from "axios";
+// axios not used after disabling custom summary
 
 interface SummaryResultsProps {
   results?: {
@@ -40,14 +40,13 @@ interface SummaryResultsProps {
 export function SummaryResults({ results, documentText }: SummaryResultsProps) {
   const [summaryLength, setSummaryLength] = useState([5]);
   const [useGroqRefinement, setUseGroqRefinement] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [customResults, setCustomResults] = useState<any>(null);
+  const [isGenerating] = useState(false);
+  const [customResults] = useState<null>(null);
   const [copied, setCopied] = useState(false);
 
   const generateCustomSummary = async () => {
     // Disabled: no backend endpoint in hf1/hf2 for this
-    setIsGenerating(true)
-    setTimeout(() => setIsGenerating(false), 500)
+    return;
   };
 
   const copyToClipboard = async (text: string) => {
