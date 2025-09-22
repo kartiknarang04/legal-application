@@ -27,7 +27,7 @@ interface NERResultsProps {
   }
 }
 
-const entityIcons: Record<string, any> = {
+const entityIcons: Record<string, typeof FileText> = {
   PERSON: Users,
   ORG: Building,
   PRECEDENT: Gavel,

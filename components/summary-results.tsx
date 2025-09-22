@@ -17,7 +17,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   AlertCircle,
   FileText,
-  Loader2,
   Sparkles,
   Copy,
   Check,
@@ -40,7 +39,6 @@ interface SummaryResultsProps {
 export function SummaryResults({ results, documentText }: SummaryResultsProps) {
   const [summaryLength, setSummaryLength] = useState([5]);
   const [useGroqRefinement, setUseGroqRefinement] = useState(true);
-  const [isGenerating] = useState(false);
   const [customResults] = useState<null>(null);
   const [copied, setCopied] = useState(false);
 

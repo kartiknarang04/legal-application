@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2 } from "lucide-react";
@@ -13,15 +13,11 @@ export default function SummaryPage() {
   const sessionId = params.sessionId as string;
   
   const [results, setResults] = useState(null);
-  const [documentText, setDocumentText] = useState("");
+  const [documentText] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchResults();
-  }, [sessionId]);
-
-  const fetchResults = async () => {
+  const fetchResults = useCallback(async () => {
     try {
       setLoading(true);
       const response = await axios.get(
@@ -33,12 +29,17 @@ export default function SummaryPage() {
       } else {
         setError('Failed to load summary results');
       }
-    } catch (error: any) {
-      setError(error.response?.data?.detail || 'Failed to load results');
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(detail || 'Failed to load results');
     } finally {
       setLoading(false);
     }
-  };
+  }, [sessionId]);
+
+  useEffect(() => {
+    fetchResults();
+  }, [fetchResults]);
 
   if (loading) {
     return (

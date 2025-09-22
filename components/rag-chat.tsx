@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -72,18 +72,7 @@ export function RAGChat({ documentText, sessionId }: RAGChatProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Check RAG system status on mount
-  useEffect(() => {
-    checkRagStatus();
-  }, []);
-
-  // Auto-scroll to bottom when new messages are added
-  useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  const checkRagStatus = async () => {
+  const checkRagStatus = useCallback(async () => {
     try {
       const response = await axios.get(
         `${process.env.NEXT_PUBLIC_BACKEND_2_URL}/rag/status`
@@ -92,7 +81,20 @@ export function RAGChat({ documentText, sessionId }: RAGChatProps) {
     } catch (error) {
       console.error("Failed to check RAG status:", error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    checkRagStatus();
+  }, [checkRagStatus]);
+
+  // Auto-scroll to bottom when new messages are added
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  
 
   const addDocumentToRAG = async () => {
     // Adapted to hf2: requires a session already processed by hf1
@@ -399,7 +401,7 @@ export function RAGChat({ documentText, sessionId }: RAGChatProps) {
                                               key={passageIndex}
                                               className="italic"
                                             >
-                                              "{passage.substring(0, 150)}..."
+                                              &quot;{passage.substring(0, 150)}&hellip;&quot;
                                             </p>
                                           )
                                         )}
