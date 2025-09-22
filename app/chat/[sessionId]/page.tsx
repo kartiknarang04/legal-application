@@ -40,7 +40,7 @@ export default function ChatPage() {
       setLoading(true);
       
       const statusResponse = await axios.get(
-        `${process.env.NEXT_PUBLIC_HF1_URL}/status/${sessionId}`
+        `${process.env.NEXT_PUBLIC_BACKEND_1_URL}/status/${sessionId}`
       );
 
       if (!statusResponse.data.session || statusResponse.data.session.status !== 'completed') {
@@ -51,7 +51,7 @@ export default function ChatPage() {
       setSessionInfo(statusResponse.data.session);
 
       const initResponse = await axios.post(
-        `${process.env.NEXT_PUBLIC_HF2_URL}/init/${sessionId}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_2_URL}/init/${sessionId}`,
         {}
       );
 
@@ -84,7 +84,7 @@ export default function ChatPage() {
 
     try {
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_HF2_URL}/chat/${sessionId}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_2_URL}/chat/${sessionId}`,
         { message: inputValue }
       );
 

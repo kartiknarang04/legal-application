@@ -55,9 +55,10 @@ interface Message {
 
 interface RAGChatProps {
   documentText: string;
+  sessionId?: string;
 }
 
-export function RAGChat({ documentText }: RAGChatProps) {
+export function RAGChat({ documentText, sessionId }: RAGChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -83,7 +84,7 @@ export function RAGChat({ documentText }: RAGChatProps) {
   const checkRagStatus = async () => {
     try {
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/rag/status`
+        `${process.env.NEXT_PUBLIC_BACKEND_2_URL}/rag/status`
       );
       setRagStatus(response.data);
     } catch (error) {
@@ -92,33 +93,41 @@ export function RAGChat({ documentText }: RAGChatProps) {
   };
 
   const addDocumentToRAG = async () => {
-    if (!documentText) return;
-
+    // Adapted to hf2: requires a session already processed by hf1
     try {
       setIsLoading(true);
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/rag/add_document`,
-        {
-          text: documentText,
-        }
-      );
-
-      if (response.data.session_id) {
-        setCurrentSessionId(response.data.session_id);
+      const sid = sessionId || currentSessionId;
+      if (!sid) {
+        const msg: Message = {
+          id: Date.now().toString(),
+          type: "assistant",
+          content: "Provide a valid sessionId to initialize RAG (use hf1 upload first).",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, msg]);
+        return;
       }
 
-      await checkRagStatus();
+      const initResp = await axios.post(
+        `${process.env.NEXT_PUBLIC_BACKEND_2_URL}/init/${sid}`,
+        {}
+      );
 
-      // Add system message
-      const systemMessage: Message = {
-        id: Date.now().toString(),
-        type: "assistant",
-        content: `Document has been added to the knowledge base (Session: ${response.data.session_id}). You can now ask questions about it!`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, systemMessage]);
+      if (initResp.data?.success) {
+        setCurrentSessionId(sid);
+        await checkRagStatus();
+        const systemMessage: Message = {
+          id: Date.now().toString(),
+          type: "assistant",
+          content: `RAG initialized for session ${sid}. You can now ask questions!`,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, systemMessage]);
+      } else {
+        throw new Error("RAG init failed");
+      }
     } catch (error) {
-      console.error("Failed to add document to RAG:", error);
+      console.error("Failed to initialize RAG:", error);
     } finally {
       setIsLoading(false);
     }
@@ -139,13 +148,11 @@ export function RAGChat({ documentText }: RAGChatProps) {
     setIsLoading(true);
 
     try {
+      const sid = sessionId || currentSessionId;
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/rag/query`,
+        `${process.env.NEXT_PUBLIC_BACKEND_2_URL}/chat/${sid}`,
         {
-          question: inputValue,
-          session_id: currentSessionId,
-          top_k: 5,
-          use_rerank: true,
+          message: inputValue,
         }
       );
 
@@ -224,10 +231,10 @@ export function RAGChat({ documentText }: RAGChatProps) {
                 {isLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Adding...
+                    Initializing...
                   </>
                 ) : (
-                  "Add Current Document"
+                  (sessionId || currentSessionId) ? "Initialize RAG" : "Init RAG (needs sessionId)"
                 )}
               </Button>
             )}

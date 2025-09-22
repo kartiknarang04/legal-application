@@ -45,30 +45,9 @@ export function SummaryResults({ results, documentText }: SummaryResultsProps) {
   const [copied, setCopied] = useState(false);
 
   const generateCustomSummary = async () => {
-    if (!documentText) {
-      return;
-    }
-
-    try {
-      setIsGenerating(true);
-
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/analyze`,
-        {
-          text: documentText,
-          summary_length: summaryLength[0],
-          use_groq_refinement: useGroqRefinement,
-        }
-      );
-
-      if (response.data.success) {
-        setCustomResults(response.data.analysis.summary_results);
-      }
-    } catch (error) {
-      console.error("Error generating custom summary:", error);
-    } finally {
-      setIsGenerating(false);
-    }
+    // Disabled: no backend endpoint in hf1/hf2 for this
+    setIsGenerating(true)
+    setTimeout(() => setIsGenerating(false), 500)
   };
 
   const copyToClipboard = async (text: string) => {
@@ -158,17 +137,12 @@ export function SummaryResults({ results, documentText }: SummaryResultsProps) {
 
           <Button
             onClick={generateCustomSummary}
-            disabled={isGenerating || !documentText}
+            disabled={true}
             className="w-full"
+            variant="outline"
+            title="No backend endpoint available"
           >
-            {isGenerating ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Generating Summary...
-              </>
-            ) : (
-              "Generate Custom Summary"
-            )}
+            Generate Custom Summary (unavailable)
           </Button>
         </CardContent>
       </Card>

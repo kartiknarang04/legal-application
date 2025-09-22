@@ -25,7 +25,7 @@ export default function SummaryPage() {
     try {
       setLoading(true);
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_HF1_URL}/results/${sessionId}`
+        `${process.env.NEXT_PUBLIC_BACKEND_1_URL}/results/${sessionId}`
       );
       
       if (response.data.success) {
