@@ -5,7 +5,7 @@ import React, { useState, useRef } from 'react';
 import { Upload, Loader2 } from 'lucide-react';
 import axios from 'axios';
 
-const BACKEND_1_URL = process.env.NEXT_PUBLIC_BACKEND_1_URL || 'http://localhost:7860';
+const BACKEND_1_URL = process.env.NEXT_PUBLIC_BACKEND_1_URL || 'https://kn29-doc-processor.hf.space';
 
 type FileUploadProps = {
   onUpload: (file: File, sessionId: string) => void;

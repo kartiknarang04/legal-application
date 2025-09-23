@@ -6,7 +6,7 @@ import { MessageSquare, Loader2, AlertCircle, Send, Bot, User, ChevronDown, Chev
 import axios from 'axios';
 import type { ChatMessage } from '../../app/page';
 
-const BACKEND_2_URL = process.env.NEXT_PUBLIC_BACKEND_2_URL || 'http://localhost:7861';
+const BACKEND_2_URL = process.env.NEXT_PUBLIC_BACKEND_2_URL || 'https://kn29-rag-chat.hf.space';
 
 type RAGChatProps = {
   sessionId: string | null;
