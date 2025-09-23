@@ -12,7 +12,7 @@ export default function NERPage() {
   const router = useRouter();
   const sessionId = params.sessionId as string;
   
-  const [results, setResults] = useState(null);
+  const [results, setResults] = useState(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
