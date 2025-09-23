@@ -12,7 +12,7 @@ export default function SummaryPage() {
   const router = useRouter();
   const sessionId = params.sessionId as string;
   
-  const [results, setResults] = useState(null);
+  const [results, setResults] = useState(undefined);
   const [documentText] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
