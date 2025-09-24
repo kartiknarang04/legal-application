@@ -22,38 +22,57 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
   const [expandedSources, setExpandedSources] = useState<Record<number, boolean>>({});
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  const initializeRAG = useCallback(async () => {
+  // This function is fine as a useCallback, but the calling effect needs to be fixed.
+  const initializeRAG = useCallback(async (currentSessionId: string) => {
+    // We set loading true here now, as this function will only be called when ready.
+    setIsLoading(true);
+    setError(null); // Clear previous errors on re-initialization
     try {
-      setIsLoading(true);
-      const response = await axios.post(`${BACKEND_2_URL}/init/${sessionId}`, {});
+      console.log(`Initializing RAG for session: ${currentSessionId}`);
+      const response = await axios.post(`${BACKEND_2_URL}/init/${currentSessionId}`, {});
       if (response.data.success) {
         setRagInitialized(true);
+        console.log("RAG Initialized successfully:", response.data);
       } else {
         throw new Error(response.data.message || 'RAG initialization failed');
       }
     } catch (error: unknown) {
       const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(`RAG initialization failed: ${detail || (error as Error).message}`);
+      const errorMessage = `RAG initialization failed: ${detail || (error as Error).message}`;
+      console.error(errorMessage);
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  }, [sessionId, setError]);
+  }, [setError]); // No need for sessionId in dependency array here
 
-  const loadChatHistory = useCallback(async () => {
+  const loadChatHistory = useCallback(async (currentSessionId: string) => {
     try {
-      const response = await axios.get(`${BACKEND_2_URL}/history/${sessionId}`);
+      const response = await axios.get(`${BACKEND_2_URL}/history/${currentSessionId}`);
       if (response.data.success) {
         setChatHistory(response.data.chat_history);
       }
     } catch (error: unknown) {
       console.error('Failed to load chat history:', error);
     }
-  }, [sessionId, setChatHistory]);
+  }, [setChatHistory]);
 
+
+  // --- CRITICAL FIX APPLIED HERE ---
+  // This useEffect now correctly depends on `sessionId`.
+  // It will only run when sessionId changes from null to a valid string.
   useEffect(() => {
-    initializeRAG();
-    loadChatHistory();
-  }, [initializeRAG, loadChatHistory]);
+    // Guard clause: Do nothing if sessionId is not yet available.
+    if (!sessionId) {
+      return;
+    }
+    
+    // When a valid sessionId is present, initialize everything.
+    setRagInitialized(false); // Reset initialization status for the new session
+    initializeRAG(sessionId);
+    loadChatHistory(sessionId);
+
+  }, [sessionId, initializeRAG, loadChatHistory]); // Depend directly on sessionId
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -120,6 +139,7 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
     }));
   };
 
+  // --- UI remains the same, only logic was changed ---
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <div style={{ textAlign: 'center' }}>
@@ -157,7 +177,7 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
       <div style={{ backgroundColor: 'white', borderRadius: '0.75rem', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', display: 'flex', flexDirection: 'column', height: '24rem' }}>
         {/* Chat Messages */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {chatHistory.length === 0 ? (
+          {chatHistory.length === 0 && !isLoading ? (
             <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
               <MessageSquare style={{ height: '3rem', width: '3rem', margin: '0 auto 1rem auto', opacity: 0.5 }} />
               <p style={{ marginBottom: '0.5rem', margin: 0 }}>No messages yet</p>
@@ -209,7 +229,7 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
                       </p>
                       <div style={{ fontSize: '0.75rem', opacity: 0.7, marginTop: '0.5rem' }}>
                         {new Date(msg.timestamp).toLocaleTimeString()}
-                        {msg.confidence && (
+                        {msg.confidence != null && (
                           <span style={{ marginLeft: '0.5rem' }}>• Confidence: {Math.round(msg.confidence)}%</span>
                         )}
                       </div>
