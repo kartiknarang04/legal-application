@@ -22,21 +22,44 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
   const [expandedSources, setExpandedSources] = useState<Record<number, boolean>>({});
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  // This function is fine as a useCallback, but the calling effect needs to be fixed.
+  // --- FIX APPLIED: Enhanced logging and error handling ---
   const initializeRAG = useCallback(async (currentSessionId: string) => {
-    // We set loading true here now, as this function will only be called when ready.
     setIsLoading(true);
-    setError(null); // Clear previous errors on re-initialization
+    setError(null);
     try {
-      console.log(`Initializing RAG for session: ${currentSessionId}`);
-      const response = await axios.post(`${BACKEND_2_URL}/init/${currentSessionId}`, {});
+      console.log(`Attempting to initialize RAG for session: ${currentSessionId}`);
+      console.log(`Making POST request to: ${BACKEND_2_URL}/init/${currentSessionId}`);
+      
+      const response = await axios.post(`${BACKEND_2_URL}/init/${currentSessionId}`, {}, {
+        timeout: 30000, // Add a 30-second timeout
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('Response received from server:', response.data);
+      
       if (response.data.success) {
         setRagInitialized(true);
         console.log("RAG Initialized successfully:", response.data);
       } else {
-        throw new Error(response.data.message || 'RAG initialization failed');
+        throw new Error(response.data.message || 'RAG initialization failed from server');
       }
     } catch (error: unknown) {
+      // Log the entire error object for maximum detail
+      console.error('Full error object during initialization:', error);
+      
+      // Add specific logging for Axios errors
+      if (axios.isAxiosError(error)) {
+        console.error('Axios error details:', {
+          message: error.message,
+          code: error.code,
+          response: error.response?.data,
+          status: error.response?.status,
+          config: error.config,
+        });
+      }
+      
       const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       const errorMessage = `RAG initialization failed: ${detail || (error as Error).message}`;
       console.error(errorMessage);
@@ -44,7 +67,7 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
     } finally {
       setIsLoading(false);
     }
-  }, [setError]); // No need for sessionId in dependency array here
+  }, [setError]);
 
   const loadChatHistory = useCallback(async (currentSessionId: string) => {
     try {
@@ -57,22 +80,17 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
     }
   }, [setChatHistory]);
 
-
-  // --- CRITICAL FIX APPLIED HERE ---
-  // This useEffect now correctly depends on `sessionId`.
-  // It will only run when sessionId changes from null to a valid string.
   useEffect(() => {
-    // Guard clause: Do nothing if sessionId is not yet available.
     if (!sessionId) {
+      console.log("Waiting for a valid session ID...");
       return;
     }
     
-    // When a valid sessionId is present, initialize everything.
-    setRagInitialized(false); // Reset initialization status for the new session
+    setRagInitialized(false);
     initializeRAG(sessionId);
     loadChatHistory(sessionId);
 
-  }, [sessionId, initializeRAG, loadChatHistory]); // Depend directly on sessionId
+  }, [sessionId, initializeRAG, loadChatHistory]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -139,7 +157,6 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
     }));
   };
 
-  // --- UI remains the same, only logic was changed ---
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <div style={{ textAlign: 'center' }}>
@@ -477,3 +494,4 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
 };
 
 export default RAGChat;
+
