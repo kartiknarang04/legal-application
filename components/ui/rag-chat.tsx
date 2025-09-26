@@ -15,6 +15,51 @@ type RAGChatProps = {
   setError: (msg: string | null) => void;
 };
 
+// Define proper types for API responses
+interface ChatHistoryItem {
+  role: 'user' | 'assistant';
+  message: string;
+  created_at?: string;
+  sources?: Array<{
+    chunk_id?: string;
+    title?: string;
+    section?: string;
+    relevance_score?: number;
+    text_preview?: string;
+    entities?: string[];
+  }>;
+  confidence?: number;
+  query_analysis?: {
+    query_type?: string;
+    key_concepts?: string[];
+    entities?: string[];
+  };
+}
+
+interface ChatHistoryResponse {
+  chat_history?: ChatHistoryItem[];
+}
+
+interface ChatResponse {
+  success: boolean;
+  answer?: string;
+  message?: string;
+  sources?: Array<{
+    chunk_id?: string;
+    title?: string;
+    section?: string;
+    relevance_score?: number;
+    text_preview?: string;
+    entities?: string[];
+  }>;
+  confidence?: number;
+  query_analysis?: {
+    query_type?: string;
+    key_concepts?: string[];
+    entities?: string[];
+  };
+}
+
 const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatProps) => {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -27,9 +72,9 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
     
     const loadChatHistory = async () => {
       try {
-        const response = await axios.get(`${BACKEND_2_URL}/history/${sessionId}`);
+        const response = await axios.get<ChatHistoryResponse>(`${BACKEND_2_URL}/history/${sessionId}`);
         if (response.data.chat_history) {
-          setChatHistory(response.data.chat_history.map((msg: any) => ({
+          setChatHistory(response.data.chat_history.map((msg: ChatHistoryItem) => ({
             role: msg.role,
             message: msg.message,
             timestamp: msg.created_at || new Date().toISOString(),
@@ -66,7 +111,7 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
     setError(null);
 
     try {
-      const response = await axios.post(`${BACKEND_2_URL}/chat/${sessionId}`, {
+      const response = await axios.post<ChatResponse>(`${BACKEND_2_URL}/chat/${sessionId}`, {
         message: userMessage.message
       }, {
         timeout: 60000, // 60 second timeout for chat requests
@@ -78,7 +123,7 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
       if (response.data.success) {
         const assistantMessage: ChatMessage = {
           role: 'assistant',
-          message: response.data.answer,
+          message: response.data.answer || '',
           timestamp: new Date().toISOString(),
           sources: response.data.sources || [],
           confidence: response.data.confidence,
@@ -283,10 +328,10 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
                             </div>
                             
                             {source.text_preview && (
-  <p style={{ color: '#374151', fontSize: '0.75rem', lineHeight: 1.5, margin: '0 0 0.5rem 0' }}>
-    {source.text_preview}
-  </p>
-)}
+                              <p style={{ color: '#374151', fontSize: '0.75rem', lineHeight: 1.5, margin: '0 0 0.5rem 0' }}>
+                                {source.text_preview}
+                              </p>
+                            )}
                             
                             {source.entities && source.entities.length > 0 && (
                               <div style={{ marginTop: '0.5rem' }}>

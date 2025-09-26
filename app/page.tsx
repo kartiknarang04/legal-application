@@ -150,6 +150,12 @@ const LegalDocumentAnalyzer = () => {
               <p style={{ fontSize: '0.875rem', color: '#6b7280', margin: 0 }}>
                 AI-powered legal document processing and analysis
               </p>
+              {/* Display uploaded file name if available */}
+              {uploadedFile && (
+                <p style={{ fontSize: '0.75rem', color: '#059669', margin: '0.25rem 0 0 0' }}>
+                  📄 {uploadedFile.name}
+                </p>
+              )}
             </div>
           </div>
           {sessionId && (
