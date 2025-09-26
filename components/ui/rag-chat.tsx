@@ -1,8 +1,8 @@
 // components/ui/rag-chat.tsx
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageSquare, Loader2, AlertCircle, Send, Bot, User, ChevronDown, ChevronUp, FileText, Database } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { MessageSquare, Loader2, Send, Bot, User, ChevronDown, ChevronUp, FileText, Database } from 'lucide-react';
 import axios from 'axios';
 import type { ChatMessage } from '../../app/page';
 
@@ -18,86 +18,41 @@ type RAGChatProps = {
 const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatProps) => {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [ragInitialized, setRagInitialized] = useState(false);
   const [expandedSources, setExpandedSources] = useState<Record<number, boolean>>({});
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  // --- FIX APPLIED: Enhanced logging and error handling ---
-  const initializeRAG = useCallback(async (currentSessionId: string) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      console.log(`Attempting to initialize RAG for session: ${currentSessionId}`);
-      console.log(`Making POST request to: ${BACKEND_2_URL}/init/${currentSessionId}`);
-      
-      const response = await axios.post(`${BACKEND_2_URL}/init/${currentSessionId}`, {}, {
-        timeout: 30000, // Add a 30-second timeout
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      console.log('Response received from server:', response.data);
-      
-      if (response.data.success) {
-        setRagInitialized(true);
-        console.log("RAG Initialized successfully:", response.data);
-      } else {
-        throw new Error(response.data.message || 'RAG initialization failed from server');
-      }
-    } catch (error: unknown) {
-      // Log the entire error object for maximum detail
-      console.error('Full error object during initialization:', error);
-      
-      // Add specific logging for Axios errors
-      if (axios.isAxiosError(error)) {
-        console.error('Axios error details:', {
-          message: error.message,
-          code: error.code,
-          response: error.response?.data,
-          status: error.response?.status,
-          config: error.config,
-        });
-      }
-      
-      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      const errorMessage = `RAG initialization failed: ${detail || (error as Error).message}`;
-      console.error(errorMessage);
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [setError]);
-
-  const loadChatHistory = useCallback(async (currentSessionId: string) => {
-    try {
-      const response = await axios.get(`${BACKEND_2_URL}/history/${currentSessionId}`);
-      if (response.data.success) {
-        setChatHistory(response.data.chat_history);
-      }
-    } catch (error: unknown) {
-      console.error('Failed to load chat history:', error);
-    }
-  }, [setChatHistory]);
-
+  // Load chat history when sessionId changes
   useEffect(() => {
-    if (!sessionId) {
-      console.log("Waiting for a valid session ID...");
-      return;
-    }
+    if (!sessionId) return;
     
-    setRagInitialized(false);
-    initializeRAG(sessionId);
-    loadChatHistory(sessionId);
+    const loadChatHistory = async () => {
+      try {
+        const response = await axios.get(`${BACKEND_2_URL}/history/${sessionId}`);
+        if (response.data.chat_history) {
+          setChatHistory(response.data.chat_history.map((msg: any) => ({
+            role: msg.role,
+            message: msg.message,
+            timestamp: msg.created_at || new Date().toISOString(),
+            sources: msg.sources || [],
+            confidence: msg.confidence,
+            query_analysis: msg.query_analysis
+          })));
+        }
+      } catch (error: unknown) {
+        console.error('Failed to load chat history:', error);
+        // Don't show error to user for history loading failure
+      }
+    };
 
-  }, [sessionId, initializeRAG, loadChatHistory]);
+    loadChatHistory();
+  }, [sessionId, setChatHistory]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory]);
 
   const sendMessage = async () => {
-    if (!message.trim() || isLoading || !ragInitialized) return;
+    if (!message.trim() || isLoading || !sessionId) return;
 
     const userMessage: ChatMessage = {
       role: 'user',
@@ -108,10 +63,16 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
     setChatHistory(prev => [...prev, userMessage]);
     setMessage('');
     setIsLoading(true);
+    setError(null);
 
     try {
       const response = await axios.post(`${BACKEND_2_URL}/chat/${sessionId}`, {
         message: userMessage.message
+      }, {
+        timeout: 60000, // 60 second timeout for chat requests
+        headers: {
+          'Content-Type': 'application/json'
+        }
       });
 
       if (response.data.success) {
@@ -129,15 +90,25 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
         throw new Error(response.data.message || 'Chat failed');
       }
     } catch (error: unknown) {
-      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(`Chat failed: ${detail || (error as Error).message}`);
-      const errorMessage: ChatMessage = {
+      console.error('Chat error:', error);
+      
+      let errorMessage = 'Sorry, I encountered an error processing your question.';
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNABORTED') {
+          errorMessage = 'Request timed out. The system may be loading your document. Please try again.';
+        } else if (error.response?.data?.detail) {
+          errorMessage = `Error: ${error.response.data.detail}`;
+        }
+      }
+      
+      setError(errorMessage);
+      const errorResponseMessage: ChatMessage = {
         role: 'assistant',
-        message: 'Sorry, I encountered an error processing your question. Please try again.',
+        message: errorMessage,
         timestamp: new Date().toISOString(),
         error: true
       };
-      setChatHistory(prev => [...prev, errorMessage]);
+      setChatHistory(prev => [...prev, errorResponseMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -157,6 +128,8 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
     }));
   };
 
+  const canSendMessage = sessionId && !isLoading && message.trim();
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <div style={{ textAlign: 'center' }}>
@@ -166,7 +139,7 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
         <p style={{ color: '#6b7280', margin: 0 }}>Ask questions about your document using natural language</p>
       </div>
 
-      {/* RAG Status */}
+      {/* Session Status */}
       <div style={{ backgroundColor: 'white', borderRadius: '0.75rem', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -174,17 +147,19 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
               width: '0.75rem', 
               height: '0.75rem', 
               borderRadius: '50%', 
-              backgroundColor: ragInitialized ? '#10b981' : '#f59e0b' 
+              backgroundColor: sessionId ? '#10b981' : '#f59e0b' 
             }} />
             <span style={{ fontWeight: 500, color: '#111827' }}>
-              {ragInitialized ? 'RAG System Ready' : 'Initializing RAG System...'}
+              {sessionId ? 'Ready to Chat' : 'Waiting for Session'}
             </span>
-            <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>Session: {sessionId}</span>
+            {sessionId && (
+              <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>Session: {sessionId.slice(-8)}</span>
+            )}
           </div>
-          {ragInitialized && (
+          {sessionId && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#10b981' }}>
               <Database style={{ height: '1rem', width: '1rem' }} />
-              <span>Advanced Legal RAG Active</span>
+              <span>RAG System Active</span>
             </div>
           )}
         </div>
@@ -194,7 +169,13 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
       <div style={{ backgroundColor: 'white', borderRadius: '0.75rem', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', display: 'flex', flexDirection: 'column', height: '24rem' }}>
         {/* Chat Messages */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {chatHistory.length === 0 && !isLoading ? (
+          {!sessionId ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
+              <MessageSquare style={{ height: '3rem', width: '3rem', margin: '0 auto 1rem auto', opacity: 0.5 }} />
+              <p style={{ marginBottom: '0.5rem', margin: 0 }}>No session available</p>
+              <p style={{ fontSize: '0.875rem', margin: 0 }}>Upload a document first to start chatting</p>
+            </div>
+          ) : chatHistory.length === 0 && !isLoading ? (
             <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
               <MessageSquare style={{ height: '3rem', width: '3rem', margin: '0 auto 1rem auto', opacity: 0.5 }} />
               <p style={{ marginBottom: '0.5rem', margin: 0 }}>No messages yet</p>
@@ -302,10 +283,10 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
                             </div>
                             
                             {source.text_preview && (
-                              <p style={{ color: '#374151', fontSize: '0.75rem', lineHeight: 1.5, margin: '0 0 0.5rem 0' }}>
-                                {source.text_preview}
-                              </p>
-                            )}
+  <p style={{ color: '#374151', fontSize: '0.75rem', lineHeight: 1.5, margin: '0 0 0.5rem 0' }}>
+    {source.text_preview}
+  </p>
+)}
                             
                             {source.entities && source.entities.length > 0 && (
                               <div style={{ marginTop: '0.5rem' }}>
@@ -340,7 +321,9 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
               <div style={{ backgroundColor: '#f3f4f6', borderRadius: '0.5rem', padding: '0.75rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Loader2 style={{ height: '1rem', width: '1rem', animation: 'spin 1s linear infinite' }} />
-                  <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>Analyzing document...</span>
+                  <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                    {chatHistory.length === 0 ? 'Loading your document...' : 'Analyzing document...'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -351,15 +334,6 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
 
         {/* Chat Input */}
         <div style={{ borderTop: '1px solid #e5e7eb', padding: '1rem' }}>
-          {!ragInitialized && (
-            <div style={{ marginBottom: '0.75rem', padding: '0.5rem', backgroundColor: '#fef3c7', border: '1px solid #fbbf24', borderRadius: '0.5rem', fontSize: '0.875rem', color: '#92400e' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <AlertCircle style={{ height: '1rem', width: '1rem' }} />
-                RAG system is initializing. Please wait before sending messages.
-              </div>
-            </div>
-          )}
-
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <input
               type="text"
@@ -367,11 +341,11 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMessage(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder={
-                ragInitialized
-                  ? "Ask a question about your legal document..."
-                  : "Initializing AI system..."
+                !sessionId
+                  ? "Upload a document first..."
+                  : "Ask a question about your legal document..."
               }
-              disabled={isLoading || !ragInitialized}
+              disabled={!canSendMessage && !message.trim()}
               style={{
                 flex: 1,
                 padding: '0.75rem',
@@ -379,12 +353,14 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
                 borderRadius: '0.5rem',
                 fontSize: '0.875rem',
                 outline: 'none',
-                opacity: (isLoading || !ragInitialized) ? 0.5 : 1,
-                cursor: (isLoading || !ragInitialized) ? 'not-allowed' : 'text'
+                opacity: (!sessionId || isLoading) ? 0.5 : 1,
+                cursor: (!sessionId || isLoading) ? 'not-allowed' : 'text'
               }}
               onFocus={(e) => {
-                e.currentTarget.style.borderColor = '#2563eb';
-                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(37, 99, 235, 0.1)';
+                if (sessionId && !isLoading) {
+                  e.currentTarget.style.borderColor = '#2563eb';
+                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(37, 99, 235, 0.1)';
+                }
               }}
               onBlur={(e) => {
                 e.currentTarget.style.borderColor = '#d1d5db';
@@ -393,24 +369,24 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
             />
             <button
               onClick={sendMessage}
-              disabled={isLoading || !message.trim() || !ragInitialized}
+              disabled={!canSendMessage}
               style={{
                 padding: '0.75rem',
                 backgroundColor: '#2563eb',
                 color: 'white',
                 borderRadius: '0.5rem',
                 border: 'none',
-                cursor: (isLoading || !message.trim() || !ragInitialized) ? 'not-allowed' : 'pointer',
-                opacity: (isLoading || !message.trim() || !ragInitialized) ? 0.5 : 1,
+                cursor: canSendMessage ? 'pointer' : 'not-allowed',
+                opacity: canSendMessage ? 1 : 0.5,
                 transition: 'background-color 0.2s'
               }}
               onMouseOver={(e) => {
-                if (!isLoading && message.trim() && ragInitialized) {
+                if (canSendMessage) {
                   e.currentTarget.style.backgroundColor = '#1d4ed8';
                 }
               }}
               onMouseOut={(e) => {
-                if (!isLoading && message.trim() && ragInitialized) {
+                if (canSendMessage) {
                   e.currentTarget.style.backgroundColor = '#2563eb';
                 }
               }}
@@ -424,7 +400,7 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
           </div>
 
           {/* Example Questions */}
-          {ragInitialized && chatHistory.length === 0 && (
+          {sessionId && chatHistory.length === 0 && !isLoading && (
             <div style={{ marginTop: '0.75rem' }}>
               <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.5rem' }}>Try asking:</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -477,7 +453,7 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
                   <span key={index} style={{ padding: '0.25rem 0.5rem', backgroundColor: '#dbeafe', color: '#1e3a8a', fontSize: '0.75rem', borderRadius: '0.25rem' }}>
                     {concept}
                   </span>
-                ))}
+                )) || <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>None found</span>}
               </div>
             </div>
             <div>
@@ -494,4 +470,3 @@ const RAGChat = ({ sessionId, chatHistory, setChatHistory, setError }: RAGChatPr
 };
 
 export default RAGChat;
-
