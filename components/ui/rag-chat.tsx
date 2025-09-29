@@ -25,6 +25,17 @@ type ChatMessage = {
   processing_time?: number;
 };
 
+// Added a specific type for the backend message payload to avoid `any`
+type BackendChatMessage = {
+  role: 'user' | 'assistant';
+  message: string;
+  created_at?: string;
+  sources?: any[];
+  confidence?: number;
+  query_analysis?: any;
+  processing_time?: number;
+};
+
 interface RAGChatProps {
   sessionId: string | null;
   chatHistory: ChatMessage[];
@@ -64,7 +75,8 @@ const RAGChat: React.FC<RAGChatProps> = ({
         if (response.ok) {
           const data = await response.json();
           if (data.chat_history && data.chat_history.length > 0) {
-            const formattedHistory: ChatMessage[] = data.chat_history.map((msg: any) => ({
+            // FIX: Replaced `any` with the specific `BackendChatMessage` type
+            const formattedHistory: ChatMessage[] = data.chat_history.map((msg: BackendChatMessage) => ({
               role: msg.role,
               message: msg.message,
               timestamp: msg.created_at || new Date().toISOString(),
@@ -338,8 +350,9 @@ const RAGChat: React.FC<RAGChatProps> = ({
                               </span>
                             </div>
                             {(source.text_preview || source.excerpt) && (
+                              // FIX: Used a template literal to avoid unescaped quotes
                               <p className="text-gray-700 text-xs leading-relaxed border-l-2 border-gray-200 pl-2">
-                                "...{source.text_preview || source.excerpt}..."
+                                {`"...${source.text_preview || source.excerpt}..."`}
                               </p>
                             )}
                           </div>
@@ -470,3 +483,4 @@ const RAGChat: React.FC<RAGChatProps> = ({
 };
 
 export default RAGChat;
+
