@@ -1,70 +1,87 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Loader2, Send, Bot, User, ChevronDown, ChevronUp, FileText, Database, Clock, Zap } from 'lucide-react';
 
+type ChatMessage = {
+  role: 'user' | 'assistant';
+  message: string;
+  timestamp: string;
+  sources?: Array<{
+    chunk_id?: string;
+    title?: string;
+    section?: string;
+    relevance_score?: number;
+    text_preview?: string;
+    entities?: string[];
+    excerpt?: string;
+  }>;
+  confidence?: number;
+  query_analysis?: {
+    query_type?: string;
+    key_concepts?: string[];
+    entities?: string[];
+  };
+  error?: boolean;
+  processing_time?: number;
+};
+
+interface RAGChatProps {
+  sessionId: string | null;
+  chatHistory: ChatMessage[];
+  setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  setError: React.Dispatch<React.SetStateAction<string | null>>;
+}
+
 const BACKEND_2_URL = process.env.NEXT_PUBLIC_BACKEND_2_URL || 'https://kn29-rag-chat.hf.space';
+const OPTIMIZED_TIMEOUT = 25000;
+const LOAD_TIMEOUT = 45000;
 
-// Optimized timeout settings
-const OPTIMIZED_TIMEOUT = 15000; // 15 seconds instead of 60
-const LOAD_TIMEOUT = 30000; // 30 seconds for initial session load
-
-const OptimizedRAGChat = ({ sessionId, chatHistory, setChatHistory, setError }) => {
+const RAGChat: React.FC<RAGChatProps> = ({ 
+  sessionId, 
+  chatHistory, 
+  setChatHistory, 
+  setError 
+}) => {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(false);
-  const [expandedSources, setExpandedSources] = useState({});
-  const [sessionInfo, setSessionInfo] = useState(null);
+  const [expandedSources, setExpandedSources] = useState<Record<number, boolean>>({});
   const [loadingState, setLoadingState] = useState('');
-  const chatEndRef = useRef(null);
-  const abortControllerRef = useRef(null);
-
-  // Load session info when sessionId changes
-  useEffect(() => {
-    if (!sessionId) {
-      setSessionInfo(null);
-      return;
-    }
-    
-    const loadSessionInfo = async () => {
-      try {
-        const response = await fetch(`${BACKEND_2_URL}/session/${sessionId}/info`, {
-          timeout: 5000
-        });
-        
-        if (response.ok) {
-          const info = await response.json();
-          setSessionInfo(info);
-        }
-      } catch (error) {
-        // Session might not be loaded yet, which is fine
-        console.log('Session not yet loaded in memory');
-      }
-    };
-
-    loadSessionInfo();
-  }, [sessionId]);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Load chat history when sessionId changes
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId) {
+      setChatHistory([]);
+      setSessionLoaded(false);
+      return;
+    }
     
     const loadChatHistory = async () => {
       try {
-        setLoadingState('Loading chat history...');
+        setLoadingState('Loading previous conversations...');
         const response = await fetch(`${BACKEND_2_URL}/history/${sessionId}`, {
-          timeout: 10000
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
         });
         
         if (response.ok) {
           const data = await response.json();
-          if (data.chat_history) {
-            setChatHistory(data.chat_history.map((msg) => ({
+          if (data.chat_history && data.chat_history.length > 0) {
+            const formattedHistory = data.chat_history.map((msg: any) => ({
               role: msg.role,
               message: msg.message,
               timestamp: msg.created_at || new Date().toISOString(),
               sources: msg.sources || [],
               confidence: msg.confidence,
-              query_analysis: msg.query_analysis
-            })));
+              query_analysis: msg.query_analysis,
+              processing_time: msg.processing_time
+            }));
+            setChatHistory(formattedHistory);
+            setSessionLoaded(true);
           }
         }
       } catch (error) {
@@ -84,19 +101,19 @@ const OptimizedRAGChat = ({ sessionId, chatHistory, setChatHistory, setError }) 
   const sendMessage = async () => {
     if (!message.trim() || isLoading || !sessionId) return;
 
-    const userMessage = {
+    const userMessage: ChatMessage = {
       role: 'user',
       message: message.trim(),
       timestamp: new Date().toISOString()
     };
 
     setChatHistory(prev => [...prev, userMessage]);
+    const currentMessage = message.trim();
     setMessage('');
     setIsLoading(true);
     setError(null);
 
-    // Determine if this is the first query (session not loaded)
-    const isFirstQuery = chatHistory.length === 0;
+    const isFirstQuery = !sessionLoaded && chatHistory.length === 0;
     setIsInitialLoad(isFirstQuery);
     
     if (isFirstQuery) {
@@ -106,7 +123,6 @@ const OptimizedRAGChat = ({ sessionId, chatHistory, setChatHistory, setError }) 
     }
 
     try {
-      // Cancel any existing request
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
@@ -115,16 +131,19 @@ const OptimizedRAGChat = ({ sessionId, chatHistory, setChatHistory, setError }) 
       
       const timeout = isFirstQuery ? LOAD_TIMEOUT : OPTIMIZED_TIMEOUT;
       const timeoutId = setTimeout(() => {
-        abortControllerRef.current.abort();
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
       }, timeout);
 
       const response = await fetch(`${BACKEND_2_URL}/chat/${sessionId}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify({
-          message: userMessage.message
+          message: currentMessage
         }),
         signal: abortControllerRef.current.signal
       });
@@ -132,16 +151,23 @@ const OptimizedRAGChat = ({ sessionId, chatHistory, setChatHistory, setError }) 
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Server error: ${response.status}`);
+        let errorMessage = `Server error: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || errorMessage;
+        } catch (e) {
+          const textError = await response.text();
+          if (textError) errorMessage = textError;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
 
       if (data.success) {
-        const assistantMessage = {
+        const assistantMessage: ChatMessage = {
           role: 'assistant',
-          message: data.answer || '',
+          message: data.answer || 'I apologize, but I was unable to generate a response.',
           timestamp: new Date().toISOString(),
           sources: data.sources || [],
           confidence: data.confidence,
@@ -151,34 +177,35 @@ const OptimizedRAGChat = ({ sessionId, chatHistory, setChatHistory, setError }) 
 
         setChatHistory(prev => [...prev, assistantMessage]);
         
-        // Update session info after successful query
         if (isFirstQuery) {
-          setSessionInfo(prev => ({ ...prev, loaded: true }));
+          setSessionLoaded(true);
         }
       } else {
-        throw new Error(data.message || 'Chat failed');
+        throw new Error(data.error_details || data.message || 'Chat processing failed');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Chat error:', error);
       
       let errorMessage = 'Sorry, I encountered an error processing your question.';
       
       if (error.name === 'AbortError') {
         if (isFirstQuery) {
-          errorMessage = 'Document loading timed out. The document may be large. Please try again.';
+          errorMessage = 'Document loading timed out. The document may be large or the server may be busy. Please try again.';
         } else {
           errorMessage = 'Query timed out. Please try a simpler question or try again.';
         }
-      } else if (error.message.includes('404')) {
-        errorMessage = 'Session not found. Please upload a document first.';
+      } else if (error.message.includes('404') || error.message.includes('not found')) {
+        errorMessage = 'Session not found. Please upload a document first or check if the session is still active.';
       } else if (error.message.includes('Failed to load session')) {
-        errorMessage = 'Could not load your document. Please check if it was uploaded correctly.';
+        errorMessage = 'Could not load your document. Please check if it was uploaded correctly and try again.';
+      } else if (error.message.includes('500') || error.message.includes('Server error')) {
+        errorMessage = 'Server error occurred. Please try again in a moment.';
       } else if (error.message) {
-        errorMessage = `Error: ${error.message}`;
+        errorMessage = error.message;
       }
       
       setError(errorMessage);
-      const errorResponseMessage = {
+      const errorResponseMessage: ChatMessage = {
         role: 'assistant',
         message: errorMessage,
         timestamp: new Date().toISOString(),
@@ -193,14 +220,14 @@ const OptimizedRAGChat = ({ sessionId, chatHistory, setChatHistory, setError }) 
     }
   };
 
-  const handleKeyPress = (e) => {
+  const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
   };
 
-  const toggleSourceExpansion = (messageIndex) => {
+  const toggleSourceExpansion = (messageIndex: number) => {
     setExpandedSources(prev => ({
       ...prev,
       [messageIndex]: !prev[messageIndex]
@@ -218,19 +245,19 @@ const OptimizedRAGChat = ({ sessionId, chatHistory, setChatHistory, setError }) 
         <p className="text-gray-600">Ask questions about your document using natural language</p>
       </div>
 
-      {/* Enhanced Session Status */}
+      {/* Session Status */}
       <div className="bg-white rounded-xl shadow-lg p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className={`w-3 h-3 rounded-full ${
-              sessionId ? 'bg-green-500' : 'bg-yellow-500'
+              sessionId && sessionLoaded ? 'bg-green-500' : sessionId ? 'bg-yellow-500' : 'bg-gray-400'
             }`} />
             <span className="font-medium text-gray-900">
-              {sessionId ? 'Ready to Chat' : 'Waiting for Session'}
+              {!sessionId ? 'No Session' : sessionLoaded ? 'Ready to Chat' : 'Session Available'}
             </span>
             {sessionId && (
               <span className="text-sm text-gray-500">
-                Session: {sessionId.slice(-8)}
+                ID: {sessionId.slice(-8)}
               </span>
             )}
           </div>
@@ -240,35 +267,13 @@ const OptimizedRAGChat = ({ sessionId, chatHistory, setChatHistory, setError }) 
                 <Database className="h-4 w-4" />
                 <span>RAG System Active</span>
               </div>
-              {sessionInfo && (
-                <div className="flex items-center gap-2 text-blue-600">
-                  <Zap className="h-4 w-4" />
-                  <span>Optimized</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2 text-blue-600">
+                <Zap className="h-4 w-4" />
+                <span>Optimized</span>
+              </div>
             </div>
           )}
         </div>
-        
-        {/* Performance Info */}
-        {sessionInfo && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div>
-                <span className="text-gray-500">Chunks:</span>
-                <div className="font-medium">{sessionInfo.metadata?.chunk_count || 0}</div>
-              </div>
-              <div>
-                <span className="text-gray-500">Load Time:</span>
-                <div className="font-medium">{(sessionInfo.metadata?.load_time || 0).toFixed(2)}s</div>
-              </div>
-              <div>
-                <span className="text-gray-500">Status:</span>
-                <div className="font-medium text-green-600">Loaded</div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Chat Container */}
@@ -293,14 +298,14 @@ const OptimizedRAGChat = ({ sessionId, chatHistory, setChatHistory, setError }) 
           ) : chatHistory.length === 0 && !isLoading ? (
             <div className="text-center py-8 text-gray-500">
               <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="mb-2">No messages yet</p>
+              <p className="mb-2">Ready to chat</p>
               <p className="text-sm">Ask questions about your legal document to get started</p>
             </div>
           ) : (
             chatHistory.map((msg, index) => (
               <div key={index} className="flex flex-col gap-2">
                 <div className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`flex gap-3 max-w-4/5 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                  <div className={`flex gap-3 max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                       msg.role === 'user' 
                         ? 'bg-blue-600 text-white'
@@ -371,9 +376,9 @@ const OptimizedRAGChat = ({ sessionId, chatHistory, setChatHistory, setError }) 
                               </span>
                             </div>
                             
-                            {source.text_preview && (
+                            {(source.text_preview || source.excerpt) && (
                               <p className="text-gray-700 text-xs leading-relaxed mb-2">
-                                {source.text_preview}
+                                {source.text_preview || source.excerpt}
                               </p>
                             )}
                             
@@ -412,8 +417,8 @@ const OptimizedRAGChat = ({ sessionId, chatHistory, setChatHistory, setError }) 
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span className="text-sm text-gray-600">
                     {isInitialLoad 
-                      ? 'Loading your document from database...'
-                      : 'Analyzing document...'}
+                      ? 'Loading document embeddings from database...'
+                      : 'Analyzing document and generating response...'}
                   </span>
                 </div>
               </div>
@@ -434,11 +439,11 @@ const OptimizedRAGChat = ({ sessionId, chatHistory, setChatHistory, setError }) 
               placeholder={
                 !sessionId
                   ? "Upload a document first..."
-                  : isInitialLoad
-                    ? "Document loading..."
+                  : isLoading
+                    ? isInitialLoad ? "Loading document..." : "Processing..."
                     : "Ask a question about your legal document..."
               }
-              disabled={!canSendMessage && !message.trim()}
+              disabled={!sessionId || isLoading}
               className={`flex-1 p-3 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 (!sessionId || isLoading) ? 'opacity-50 cursor-not-allowed' : ''
               }`}
@@ -519,4 +524,4 @@ const OptimizedRAGChat = ({ sessionId, chatHistory, setChatHistory, setError }) 
   );
 };
 
-export default OptimizedRAGChat;
+export default RAGChat;
