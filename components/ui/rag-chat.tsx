@@ -1,38 +1,43 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Loader2, Send, Bot, User, ChevronDown, ChevronUp, FileText, Database, Clock, Zap } from 'lucide-react';
 
-// Type definitions remain the same
+// Define detailed types to be reused
+type Source = {
+  chunk_id?: string;
+  title?: string;
+  section?: string;
+  relevance_score?: number;
+  text_preview?: string;
+  entities?: string[];
+  excerpt?: string;
+};
+
+type QueryAnalysis = {
+  query_type?: string;
+  key_concepts?: string[];
+  entities?: string[];
+};
+
+// Frontend ChatMessage type using the detailed types
 type ChatMessage = {
   role: 'user' | 'assistant';
   message: string;
   timestamp: string;
-  sources?: Array<{
-    chunk_id?: string;
-    title?: string;
-    section?: string;
-    relevance_score?: number;
-    text_preview?: string;
-    entities?: string[];
-    excerpt?: string;
-  }>;
+  sources?: Source[];
   confidence?: number;
-  query_analysis?: {
-    query_type?: string;
-    key_concepts?: string[];
-    entities?: string[];
-  };
+  query_analysis?: QueryAnalysis;
   error?: boolean;
   processing_time?: number;
 };
 
-// Added a specific type for the backend message payload to avoid `any`
+// Backend message payload type now using specific, non-`any` types
 type BackendChatMessage = {
   role: 'user' | 'assistant';
   message: string;
   created_at?: string;
-  sources?: any[];
+  sources?: Source[];
   confidence?: number;
-  query_analysis?: any;
+  query_analysis?: QueryAnalysis;
   processing_time?: number;
 };
 
@@ -75,7 +80,6 @@ const RAGChat: React.FC<RAGChatProps> = ({
         if (response.ok) {
           const data = await response.json();
           if (data.chat_history && data.chat_history.length > 0) {
-            // FIX: Replaced `any` with the specific `BackendChatMessage` type
             const formattedHistory: ChatMessage[] = data.chat_history.map((msg: BackendChatMessage) => ({
               role: msg.role,
               message: msg.message,
@@ -176,7 +180,6 @@ const RAGChat: React.FC<RAGChatProps> = ({
         throw new Error(data.error_details || data.message || 'Chat processing failed');
       }
     } catch (error: unknown) {
-      // --- THIS IS THE CORRECTED SECTION ---
       // TYPE GUARD: Safely handle the error by checking if it's an instance of Error.
       let errorMessage = 'Sorry, I encountered an unexpected error.';
 
@@ -350,7 +353,6 @@ const RAGChat: React.FC<RAGChatProps> = ({
                               </span>
                             </div>
                             {(source.text_preview || source.excerpt) && (
-                              // FIX: Used a template literal to avoid unescaped quotes
                               <p className="text-gray-700 text-xs leading-relaxed border-l-2 border-gray-200 pl-2">
                                 {`"...${source.text_preview || source.excerpt}..."`}
                               </p>
