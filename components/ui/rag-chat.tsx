@@ -60,7 +60,7 @@ const RAGChat: React.FC<RAGChatProps> = ({
 }) => {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isInitialQuery, setIsInitialQuery] = useState(true); // Simplified state
+  const [isInitialQuery, setIsInitialQuery] = useState(true);
   const [expandedSources, setExpandedSources] = useState<Record<number, boolean>>({});
   const chatEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -74,7 +74,7 @@ const RAGChat: React.FC<RAGChatProps> = ({
     }
 
     const loadChatHistory = async () => {
-      setIsLoading(true); // Show loader while fetching history
+      setIsLoading(true);
       try {
         const response = await fetch(`${BACKEND_2_URL}/history/${sessionId}`);
         if (response.ok) {
@@ -90,9 +90,9 @@ const RAGChat: React.FC<RAGChatProps> = ({
               processing_time: msg.processing_time
             }));
             setChatHistory(formattedHistory);
-            setIsInitialQuery(false); // History exists, so it's not the initial query
+            setIsInitialQuery(false);
           } else {
-            setIsInitialQuery(true); // No history, next message is the first
+            setIsInitialQuery(true);
           }
         }
       } catch (err) {
@@ -174,13 +174,12 @@ const RAGChat: React.FC<RAGChatProps> = ({
         };
         setChatHistory(prev => [...prev, assistantMessage]);
         if (isInitialQuery) {
-          setIsInitialQuery(false); // The first successful query has been made
+          setIsInitialQuery(false);
         }
       } else {
         throw new Error(data.error_details || data.message || 'Chat processing failed');
       }
     } catch (error: unknown) {
-      // TYPE GUARD: Safely handle the error by checking if it's an instance of Error.
       let errorMessage = 'Sorry, I encountered an unexpected error.';
 
       if (error instanceof Error) {
@@ -193,13 +192,11 @@ const RAGChat: React.FC<RAGChatProps> = ({
         } else if (error.message.includes('404')) {
           errorMessage = 'Session not found. Please re-upload your document.';
         } else if (error.message.includes('500') || error.message.includes('Server error')) {
-            errorMessage = 'A server error occurred. Please try again in a moment.';
+          errorMessage = 'A server error occurred. Please try again in a moment.';
         } else {
-            // Use the specific message from the error object
-            errorMessage = error.message;
+          errorMessage = error.message;
         }
       } else {
-        // Handle cases where the thrown value isn't an Error object
         console.error('An unexpected non-error was thrown:', error);
         errorMessage = String(error);
       }
@@ -234,37 +231,47 @@ const RAGChat: React.FC<RAGChatProps> = ({
   
   const canSendMessage = sessionId && !isLoading && message.trim();
   const sessionStatusText = !sessionId ? 'No Session' : (chatHistory.length > 0 || !isInitialQuery) ? 'Ready to Chat' : 'Session Available';
-  const sessionStatusColor = !sessionId ? 'bg-gray-400' : (chatHistory.length > 0 || !isInitialQuery) ? 'bg-green-500' : 'bg-yellow-500';
+  const sessionStatusColor = !sessionId ? '#9ca3af' : (chatHistory.length > 0 || !isInitialQuery) ? '#10b981' : '#eab308';
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div style={{ textAlign: 'center' }}>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#111827', marginBottom: '1rem', margin: '0 0 1rem 0' }}>
           AI Legal Assistant
         </h2>
-        <p className="text-gray-600">Ask questions about your document using natural language</p>
+        <p style={{ color: '#6b7280', margin: 0 }}>Ask questions about your document using natural language</p>
       </div>
 
       {/* Session Status */}
-      <div className="bg-white rounded-xl shadow-lg p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`w-3 h-3 rounded-full ${sessionStatusColor}`} />
-            <span className="font-medium text-gray-900">{sessionStatusText}</span>
+      <div style={{ 
+        backgroundColor: 'white', 
+        borderRadius: '0.75rem', 
+        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', 
+        padding: '1rem' 
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ 
+              width: '0.75rem', 
+              height: '0.75rem', 
+              borderRadius: '9999px', 
+              backgroundColor: sessionStatusColor 
+            }} />
+            <span style={{ fontWeight: 500, color: '#111827' }}>{sessionStatusText}</span>
             {sessionId && (
-              <span className="text-sm text-gray-500">
+              <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
                 ID: {sessionId.slice(-8)}
               </span>
             )}
           </div>
           {sessionId && (
-            <div className="flex items-center gap-4 text-sm">
-              <div className="flex items-center gap-2 text-green-600">
-                <Database className="h-4 w-4" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.875rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#10b981' }}>
+                <Database style={{ height: '1rem', width: '1rem' }} />
                 <span>RAG System Active</span>
               </div>
-              <div className="flex items-center gap-2 text-blue-600">
-                <Zap className="h-4 w-4" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#2563eb' }}>
+                <Zap style={{ height: '1rem', width: '1rem' }} />
                 <span>Optimized</span>
               </div>
             </div>
@@ -273,53 +280,108 @@ const RAGChat: React.FC<RAGChatProps> = ({
       </div>
 
       {/* Chat Container */}
-      <div className="bg-white rounded-xl shadow-lg flex flex-col h-[32rem]">
+      <div style={{ 
+        backgroundColor: 'white', 
+        borderRadius: '0.75rem', 
+        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        height: '32rem' 
+      }}>
         {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+        <div style={{ 
+          flex: 1, 
+          overflowY: 'auto', 
+          padding: '1rem', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '1rem' 
+        }}>
           {!sessionId ? (
-            <div className="m-auto text-center text-gray-500">
-              <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="font-semibold">No session available</p>
-              <p className="text-sm">Upload a document to start chatting</p>
+            <div style={{ margin: 'auto', textAlign: 'center', color: '#6b7280' }}>
+              <MessageSquare style={{ height: '3rem', width: '3rem', margin: '0 auto 1rem', opacity: 0.5 }} />
+              <p style={{ fontWeight: 600, margin: '0 0 0.25rem 0' }}>No session available</p>
+              <p style={{ fontSize: '0.875rem', margin: 0 }}>Upload a document to start chatting</p>
             </div>
           ) : chatHistory.length === 0 && !isLoading ? (
-            <div className="m-auto text-center text-gray-500">
-              <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="font-semibold">Ready to chat</p>
-              <p className="text-sm">Ask any question about your document to get started</p>
+            <div style={{ margin: 'auto', textAlign: 'center', color: '#6b7280' }}>
+              <MessageSquare style={{ height: '3rem', width: '3rem', margin: '0 auto 1rem', opacity: 0.5 }} />
+              <p style={{ fontWeight: 600, margin: '0 0 0.25rem 0' }}>Ready to chat</p>
+              <p style={{ fontSize: '0.875rem', margin: 0 }}>Ask any question about your document to get started</p>
             </div>
           ) : (
             chatHistory.map((msg, index) => (
-              <div key={index} className="flex flex-col gap-2">
-                <div className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`flex gap-3 max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                      msg.role === 'user' 
-                        ? 'bg-blue-600 text-white'
+              <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '0.75rem', 
+                  justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' 
+                }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    gap: '0.75rem', 
+                    maxWidth: '80%',
+                    flexDirection: msg.role === 'user' ? 'row-reverse' : 'row'
+                  }}>
+                    <div style={{ 
+                      width: '2rem', 
+                      height: '2rem', 
+                      borderRadius: '9999px', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      flexShrink: 0,
+                      backgroundColor: msg.role === 'user' 
+                        ? '#2563eb' 
                         : msg.error 
-                          ? 'bg-red-100 text-red-600'
-                          : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {msg.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                          ? '#fee2e2' 
+                          : '#f3f4f6',
+                      color: msg.role === 'user' 
+                        ? 'white' 
+                        : msg.error 
+                          ? '#dc2626' 
+                          : '#6b7280'
+                    }}>
+                      {msg.role === 'user' ? <User style={{ height: '1rem', width: '1rem' }} /> : <Bot style={{ height: '1rem', width: '1rem' }} />}
                     </div>
-                    <div className={`rounded-lg p-3 ${
-                      msg.role === 'user'
-                        ? 'bg-blue-600 text-white'
+                    <div style={{ 
+                      borderRadius: '0.5rem', 
+                      padding: '0.75rem',
+                      backgroundColor: msg.role === 'user'
+                        ? '#2563eb'
                         : msg.error
-                          ? 'bg-red-50 text-red-800 border border-red-200'
-                          : 'bg-gray-100 text-gray-900'
-                    }`}>
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                          ? '#fef2f2'
+                          : '#f3f4f6',
+                      color: msg.role === 'user'
+                        ? 'white'
+                        : msg.error
+                          ? '#991b1b'
+                          : '#111827',
+                      border: msg.error ? '1px solid #fecaca' : 'none'
+                    }}>
+                      <p style={{ 
+                        fontSize: '0.875rem', 
+                        lineHeight: 1.6, 
+                        whiteSpace: 'pre-wrap',
+                        margin: 0
+                      }}>
                         {msg.message}
                       </p>
-                      <div className="text-xs opacity-70 mt-2 flex items-center gap-2">
+                      <div style={{ 
+                        fontSize: '0.75rem', 
+                        opacity: 0.7, 
+                        marginTop: '0.5rem', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.5rem' 
+                      }}>
                         <span>{new Date(msg.timestamp).toLocaleTimeString()}</span>
                         {msg.confidence != null && (
                           <span>• Confidence: {Math.round(msg.confidence * 100)}%</span>
                         )}
                         {msg.processing_time != null && (
                           <>
-                            <Clock className="h-3 w-3" />
+                            <Clock style={{ height: '0.75rem', width: '0.75rem' }} />
                             <span>{msg.processing_time.toFixed(2)}s</span>
                           </>
                         )}
@@ -330,30 +392,61 @@ const RAGChat: React.FC<RAGChatProps> = ({
 
                 {/* Sources */}
                 {msg.sources && msg.sources.length > 0 && (
-                  <div className="ml-11">
+                  <div style={{ marginLeft: '2.75rem' }}>
                     <button
                       onClick={() => toggleSourceExpansion(index)}
-                      className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        fontSize: '0.875rem',
+                        color: '#6b7280',
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 0,
+                        transition: 'color 0.2s'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.color = '#374151'}
+                      onMouseOut={(e) => e.currentTarget.style.color = '#6b7280'}
                     >
-                      <FileText className="h-4 w-4" />
+                      <FileText style={{ height: '1rem', width: '1rem' }} />
                       <span>Sources ({msg.sources.length})</span>
-                      {expandedSources[index] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      {expandedSources[index] ? <ChevronUp style={{ height: '1rem', width: '1rem' }} /> : <ChevronDown style={{ height: '1rem', width: '1rem' }} />}
                     </button>
                     {expandedSources[index] && (
-                      <div className="mt-2 space-y-2">
+                      <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         {msg.sources.map((source, sourceIndex) => (
-                          <div key={sourceIndex} className="p-3 bg-gray-50 rounded-lg border text-sm">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2 font-medium">
+                          <div key={sourceIndex} style={{ 
+                            padding: '0.75rem', 
+                            backgroundColor: '#f9fafb', 
+                            borderRadius: '0.5rem', 
+                            border: '1px solid #e5e7eb',
+                            fontSize: '0.875rem' 
+                          }}>
+                            <div style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'space-between', 
+                              marginBottom: '0.5rem' 
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500 }}>
                                 <span>{source.title || 'Document'}</span>
-                                {source.section && <span className="text-gray-600">({source.section})</span>}
+                                {source.section && <span style={{ color: '#6b7280' }}>({source.section})</span>}
                               </div>
-                              <span className="text-xs text-gray-600">
+                              <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
                                 Score: {(source.relevance_score || 0).toFixed(3)}
                               </span>
                             </div>
                             {(source.text_preview || source.excerpt) && (
-                              <p className="text-gray-700 text-xs leading-relaxed border-l-2 border-gray-200 pl-2">
+                              <p style={{ 
+                                color: '#374151', 
+                                fontSize: '0.75rem', 
+                                lineHeight: 1.6, 
+                                borderLeft: '2px solid #d1d5db', 
+                                paddingLeft: '0.5rem',
+                                margin: 0
+                              }}>
                                 {`"...${source.text_preview || source.excerpt}..."`}
                               </p>
                             )}
@@ -368,21 +461,30 @@ const RAGChat: React.FC<RAGChatProps> = ({
           )}
           
           {isLoading && !chatHistory.some(m => m.role === 'user') && (
-            <div className="m-auto text-center text-blue-600">
-              <Loader2 className="h-6 w-6 animate-spin mx-auto" />
-              <p className="text-sm mt-2">Loading chat history...</p>
+            <div style={{ margin: 'auto', textAlign: 'center', color: '#2563eb' }}>
+              <Loader2 style={{ height: '1.5rem', width: '1.5rem', margin: '0 auto', animation: 'spin 1s linear infinite' }} />
+              <p style={{ fontSize: '0.875rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>Loading chat history...</p>
             </div>
           )}
 
           {isLoading && chatHistory.some(m => m.role === 'user') && (
-            <div className="flex gap-3 justify-start mt-4">
-              <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-                <Bot className="h-4 w-4 text-gray-600" />
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-start', marginTop: '1rem' }}>
+              <div style={{ 
+                width: '2rem', 
+                height: '2rem', 
+                borderRadius: '9999px', 
+                backgroundColor: '#f3f4f6', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                flexShrink: 0 
+              }}>
+                <Bot style={{ height: '1rem', width: '1rem', color: '#6b7280' }} />
               </div>
-              <div className="bg-gray-100 rounded-lg p-3">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-                  <span className="text-sm text-gray-600">
+              <div style={{ backgroundColor: '#f3f4f6', borderRadius: '0.5rem', padding: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Loader2 style={{ height: '1rem', width: '1rem', color: '#6b7280', animation: 'spin 1s linear infinite' }} />
+                  <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
                     {isInitialQuery 
                       ? 'Analyzing document...'
                       : 'Generating response...'}
@@ -396,8 +498,8 @@ const RAGChat: React.FC<RAGChatProps> = ({
         </div>
 
         {/* Chat Input */}
-        <div className="border-t p-4">
-          <div className="relative">
+        <div style={{ borderTop: '1px solid #e5e7eb', padding: '1rem' }}>
+          <div style={{ position: 'relative' }}>
             <input
               type="text"
               value={message}
@@ -411,26 +513,67 @@ const RAGChat: React.FC<RAGChatProps> = ({
                     : "Ask a question..."
               }
               disabled={!sessionId || isLoading}
-              className="w-full p-3 pr-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                paddingRight: '3rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.5rem',
+                fontSize: '0.875rem',
+                outline: 'none',
+                opacity: (!sessionId || isLoading) ? 0.5 : 1,
+                cursor: (!sessionId || isLoading) ? 'not-allowed' : 'text'
+              }}
+              onFocus={(e) => {
+                if (sessionId && !isLoading) {
+                  e.currentTarget.style.boxShadow = '0 0 0 2px #2563eb';
+                }
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.boxShadow = 'none';
+              }}
             />
             <button
               onClick={sendMessage}
               disabled={!canSendMessage}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-blue-600 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed enabled:hover:bg-blue-700"
+              style={{
+                position: 'absolute',
+                right: '0.5rem',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                padding: '0.5rem',
+                backgroundColor: '#2563eb',
+                color: 'white',
+                borderRadius: '0.375rem',
+                border: 'none',
+                cursor: canSendMessage ? 'pointer' : 'not-allowed',
+                opacity: canSendMessage ? 1 : 0.5,
+                transition: 'background-color 0.2s'
+              }}
+              onMouseOver={(e) => {
+                if (canSendMessage) {
+                  e.currentTarget.style.backgroundColor = '#1d4ed8';
+                }
+              }}
+              onMouseOut={(e) => {
+                if (canSendMessage) {
+                  e.currentTarget.style.backgroundColor = '#2563eb';
+                }
+              }}
             >
               {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 style={{ height: '1rem', width: '1rem', animation: 'spin 1s linear infinite' }} />
               ) : (
-                <Send className="h-4 w-4" />
+                <Send style={{ height: '1rem', width: '1rem' }} />
               )}
             </button>
           </div>
 
           {/* Example Questions */}
           {sessionId && isInitialQuery && !isLoading && (
-            <div className="mt-3">
-              <p className="text-xs text-gray-600 mb-2">Try asking:</p>
-              <div className="flex flex-wrap gap-2">
+            <div style={{ marginTop: '0.75rem' }}>
+              <p style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.5rem', margin: '0 0 0.5rem 0' }}>Try asking:</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                 {[
                   "What is the main legal issue in this case?",
                   "Who are the key parties involved?",
@@ -439,7 +582,18 @@ const RAGChat: React.FC<RAGChatProps> = ({
                   <button
                     key={question}
                     onClick={() => setMessage(question)}
-                    className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
+                    style={{
+                      padding: '0.25rem 0.75rem',
+                      fontSize: '0.75rem',
+                      backgroundColor: '#f3f4f6',
+                      color: '#374151',
+                      borderRadius: '9999px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#e5e7eb'}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
                   >
                     {question}
                   </button>
@@ -452,37 +606,59 @@ const RAGChat: React.FC<RAGChatProps> = ({
 
       {/* Query Analysis */}
       {chatHistory.slice().reverse().find(msg => msg.query_analysis)?.query_analysis && (
-        <div className="bg-white rounded-xl shadow-lg p-4">
-          <h4 className="font-semibold text-gray-900 mb-3">Last Query Analysis</h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+        <div style={{ 
+          backgroundColor: 'white', 
+          borderRadius: '0.75rem', 
+          boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', 
+          padding: '1rem' 
+        }}>
+          <h4 style={{ fontWeight: 600, color: '#111827', marginBottom: '0.75rem', margin: '0 0 0.75rem 0' }}>Last Query Analysis</h4>
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+            gap: '1rem', 
+            fontSize: '0.875rem' 
+          }}>
             <div>
-              <span className="text-gray-600">Query Type:</span>
-              <div className="font-medium mt-1 capitalize">
+              <span style={{ color: '#6b7280' }}>Query Type:</span>
+              <div style={{ fontWeight: 500, marginTop: '0.25rem', textTransform: 'capitalize' }}>
                 {chatHistory.slice().reverse().find(msg => msg.query_analysis)?.query_analysis?.query_type || 'general'}
               </div>
             </div>
             <div>
-              <span className="text-gray-600">Key Concepts:</span>
-              <div className="flex flex-wrap gap-1 mt-1">
+              <span style={{ color: '#6b7280' }}>Key Concepts:</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.25rem' }}>
                 {chatHistory.slice().reverse().find(msg => msg.query_analysis)?.query_analysis?.key_concepts?.map((concept) => (
-                  <span key={concept} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                  <span key={concept} style={{ 
+                    padding: '0.25rem 0.5rem', 
+                    backgroundColor: '#dbeafe', 
+                    color: '#1e40af', 
+                    fontSize: '0.75rem', 
+                    borderRadius: '0.25rem' 
+                  }}>
                     {concept}
                   </span>
-                )) || <span className="text-xs text-gray-500">None found</span>}
+                )) || <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>None found</span>}
               </div>
             </div>
             <div>
-              <span className="text-gray-600">Entities Found:</span>
-              <div className="font-medium mt-1">
+              <span style={{ color: '#6b7280' }}>Entities Found:</span>
+              <div style={{ fontWeight: 500, marginTop: '0.25rem' }}>
                 {chatHistory.slice().reverse().find(msg => msg.query_analysis)?.query_analysis?.entities?.length || 0}
               </div>
             </div>
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };
 
 export default RAGChat;
-
